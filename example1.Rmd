@@ -1,0 +1,475 @@
+---
+title: "Bellabeat Case Study"
+author: "Yosup Kim"
+date: "2024-03-25"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+### __ASK:__
+In this case study, we are asked by a company, Bellabeat, to track and identify trends in their device usage by their customers.
+Bellabeat is a fitness device company with a total of 3 devices: Leaf, Time, and Spring. Bellabeat also provides a subscription-based membership with a fully guided help into their nutrition, activity, sleep, health and beauty based on their lifestyle and goals. 
+
+####### __Goals:__
+The shareholder of Bellabeat has specifically asked 3 major questions to be solved:
+
+  1. What are some visible trends in their smart device usage?
+  
+  2. How could these trends apply to Bellabeat Customers?
+  
+  3. And how could these trends help influence Bellabeat's future marketing strategy?
+  
+####### __Important People:__
+  * _Urska Srsen_ (Cofounder and Chief Crative Officer of Bellabeat)
+  * _Sando Mur_ (Cofounder and Mathematicion of Bellabeat)
+  * _Bellabeat's Marketing Team_
+
+
+***
+
+### __PREPARE:__
+The data was given from [Kaggle](https:// https://www.kaggle.com/datasets/arashnic/fitbit), which contains a total of 18 csv files. The CSV files contain duplicate information where one is saved in the Long format and the other in the Wide format. The licensing of this dataset follows the Public Domain [CCO: Pubic Domain](https://creativecommons.org/publicdomain/zero/1.0/) 
+
+####### __About the Data:__
+Although the Kaggle page did not contain a description of the dataset, a data dictionary was found from an outside resource for the dataset ([Fitabase Fitbit Data Dictionary as of 2:14:24](https://fitabase.com/media/2085/fitabase-fitbit-data-dictionary-as-of-21424-1.pdf)).
+
+The dataset contains personal fitness information that are tracked by the Bellabeat devices or manually inputted by the verified users. The total number of verified users in this dataset is said to be 30, with their age, name, and sex  all kept unknown. All thirty of the users have consented to the submission of their personal tracked data, which includes: heart rate, active minute, active intensity, sleep measurement, steps, weight, and MET. Each specific user is identified with a unique numeric ID.
+
+__Limitations:__ 
+
+Because of the small sample size of 30 users and the ommitment of some of their personal information, we cannot fully say the upcoming analysis is a 100%. To do so, we would need a bigger pool of data that we can analyze.
+
+
+***
+
+### __PROCESS:__
+First, I downloaded the necessary libraries and then uploaded the CSV files that I wanted onto R.
+
+```{r}
+library(tidyverse)
+library(ggplot2)
+library(tidyr)
+library(readr)
+library(lubridate)
+
+dailyActivity <- read_csv("C:/Users/yosup/Downloads/archive (3)/Fitabase Data 4.12.16-5.12.16/dailyActivity_merged.csv")
+
+weightLog <- read_csv("C:/Users/yosup/Downloads/archive (3)/Fitabase Data 4.12.16-5.12.16/weightLogInfo_merged.csv")
+
+sleepDay <- read_csv("C:/Users/yosup/Downloads/archive (3)/Fitabase Data 4.12.16-5.12.16/sleepDay_merged.csv")
+
+heartrate_seconds <- read_csv("C:/Users/yosup/Downloads/archive (3)/Fitabase Data 4.12.16-5.12.16/heartrate_seconds_merged.csv")
+```
+
+
+
+ * "dailyActivity" is the dataset that contains all of the information of all other dataset except for data regarding sleep and heart rate. So using "dailyActivity" we check the total number of users in the dataset.
+``` {r}
+n_distinct(dailyActivity$Id)
+```
+ * We can see that there are a total of 33 different users in the dataset whereas in the data dictionary stated that there are only a total of 30. This can be due to errors by the person gathering data or some users might have more than one ID.
+
+
+
+ * We will start with weightLog dataset. We want to see how many users are in this dataset
+```{r}
+n_distinct(weightLog$Id)
+```
+ * We see that there are a total of 8 distinct users, so immediately we are aware that not all users used their fitness device to track their weight.
+
+ * We also want to see how many of the users activities were manually inputted.
+```{r}
+length(which(weightLog$IsManualReport==TRUE))
+length(weightLog$IsManualReport)
+```
+ * Out of the 67 entries in the weightLog dataset, there were a total of 41 entries that were manually inputted by the user.
+
+ * I noticed that there were a lot of NA in the Fat column of the weightLog dataset, so we check to see how much there really was.
+```{r}
+sum(is.na(weightLog$Fat))
+```
+ * 65 out of 67 entries were NA in the Fat Column so we can safely assume that the users did not use the smart devices to track their "Fat"
+
+ * To get an even better understanding of the data, I want to see the time span of the activity log date. I got the earliest date and the latest data recorded and saved them into "date_range_sleepDay". We see that the earliest entry date was 4/12/2016 at 12 AM and the last data entry was at 5/9/2016 12 AM. So we can say that the data was at most measured from that date gap, almost a month.
+```{r}
+date_range_sleepDay <- range(sleepDay$SleepDay)
+date_range_sleepDay
+```
+
+ * I also noticed that dataset may have some users having more entries than other users in the dataset. To find this out, I counted the number of occurrence of each user ID's in the dataset and then calculated the standard deviation.
+```{r}
+sdEntries <- sleepDay %>% count(Id)
+sd(sdEntries$n)
+```
+ * We get a large standard deviation of 11.49661, which tells us that rather than having an even amount of entries by all users, it is mostly dominated by some users.
+
+
+ * Now we look at the TotalMinutesAsleep and the TotalTimeInBed column of the dataset. To begin, I want to calculate the mean of both.
+```{r}
+mean(sleepDay$TotalMinutesAsleep)
+hist(sleepDay$TotalMinutesAsleep)
+mean(sleepDay$TotalTimeInBed)
+hist(sleepDay$TotalTimeInBed)
+```
+
+ * We get that on average, the users slept around 419 minutes, while also spending an average of 459 minutes in bed (including the sleeping time). Therefore, on average, around 40 minutes were spent awake in bed. The histograms are there to just help me visualize the data.
+
+
+ * To make the sleepDay dataset a bit more to my liking, I created a new column "TimeDiff" which shows the difference between the time spent in bed and the time spent actually sleeping.
+```{r}
+sleepDay <- transform(sleepDay, TimeDiff = abs(sleepDay$TotalMinutesAsleep - sleepDay$TotalTimeInBed))
+```
+ * I will use this new column later on in my analysis.
+
+
+ * Now taking a look at the heartrate dataset, we begin by finding the max/min of the Time and Value columns. I also want to see the mean and the spread of the Value column.
+```{r}
+range(heartrate_seconds$Time)
+hist(heartrate_seconds$Value)
+summary(heartrate_seconds$Value)
+sd(heartrate_seconds$Value)
+```
+ * Again, similarly to the sleepDay dataset, the date span is from 4/12/16 to 5/9/16, the only difference being that the time starts from 1 AM to 9:59:59 PM and instead of 12. We also see that the lowest heartrate recorded was 36 and the highest was 206.
+ 
+ * A normal adult resting heart rate is 60-100 bpm, but 40-60 bpm can be normal when one is sleeping, so for the 36 the user might have been sleeping or perhaps the device was broken
+ 
+ * The average heartrate for a person working out in their 20's is 100-170 bpm with an average maximum of 200. So we might be able to assume that the user was working out or having an emergency (or perhaps another error with the device).
+
+
+* Now I want to create a simpler version of the heartrate_seconds because of its large size. 
+```{r}
+max_min_heart8 <- heartrate_seconds %>% group_by(Id) %>% summarize(across(everything(), max))
+max_min_heart8 <- max_min_heart8 %>% rename(maxTime = Time, maxValue = Value)
+temp <- heartrate_seconds %>% group_by(Id) %>% summarize(across(everything(), min))
+
+max_min_heart8 <- cbind(max_min_heart8, temp$Time, temp$Value)
+max_min_heart8 <- max_min_heart8 %>% rename(minTime = `temp$Time`, minValue = `temp$Value`)
+max_min_heart8 <- max_min_heart8 %>% relocate(minTime,  .before = maxValue)
+ 
+
+max_min_heart8 <- cbind(max_min_heart8, heartrate_seconds %>% count(Id))
+max_min_heart8 <- max_min_heart8 %>% select(-6)
+max_min_heart8 <- max_min_heart8 %>% rename(Count = n)
+max_min_heart8
+```
+
+ * The max_min_heart8 basically contains a summary of each unique user ID that was in the heartrate_seconds dataset.It shows the max/min of both their respective heart rate value and the date of entry along with the number of occurrence of each ID in the heartrate_seconds dataset. I will use this dataset later for analysis.
+
+ * The DailyActivity dataset is also big, so just I like did for the heartrate_seconds dataset, I will create another dataset that summarizes the dailyActivity dataset, however, this time I will only find the max of each column for each ID for now.
+```{r}
+maxmin_dailyActivity <- dailyActivity %>% group_by(Id) %>% summarize(across(everything(), max))
+glimpse(dailyActivity)
+
+```
+
+
+ * I saw that most of the rows in the LoggedActivitiesDistance column had zero's so I had to see how many of the entries were actually logged.
+```{r}
+#filtering out all the unlogged days of activity
+active_days <- filter(dailyActivity, dailyActivity$LoggedActivitiesDistance > 0)
+length(active_days)
+#only 4 unique users had LoggedActivityDistance > 0
+n_distinct(active_days$Id)
+```
+ * We see that there was only a total of 15 entries that were manually logged and that only 4 distinct users had done so.
+ * This might mean 2 things: either only 4/15 use this technology willingly or the device had an error causing the user to input the distance themselves. Or perhaps, the user were not wearing the device during their activity and therefore had to input the distance themselves.
+
+
+ * What I want to do now is create a new dataset that contains all the information that I needed (or most), so instead of using a multiple datasets, I can just use one or two. First, I created a sleepTemp that will temporarily hold all the information I need from sleepDay while I try to merge it with dailyActivity.
+```{r}
+sleepTemp <- sleepDay %>% separate(SleepDay, into = c("NewDate", "Hour", "AM_or_PM"), sep = " ") %>% rename
+View(sleepTemp)
+merged_data <- left_join(dailyActivity, sleepTemp, by = c('Id' = 'Id','ActivityDate' = 'NewDate'), relationship = "many-to-many") 
+merged_data <- merged_data %>% relocate(ActivityDate, .before = TotalSteps)
+n_distinct(merged_data$Id)
+summary(merged_data)
+```
+
+ * Now I want to organize and add to the merged_data dataset. To make things easier, I wanted to simplify my findings into weekdays as using specific dates may be hard to understand when analyzing, so I add a new column, WeekDay, to the dataset, which shows what day of the week it was when the entry was made. 
+```{r}
+merged_data <- merged_data %>% mutate(Weekday = weekdays(mdy(ActivityDate)))
+merged_data
+```
+
+ * Now, I believe I am ready to begin analyzing and visualizing the data. I will return to making more alterations when needed.
+
+***
+
+### __ANALYZE:__
+
+ * I want to see the difference of activity per Weekday, so I created a bar chart using the merged_data.
+```{r}
+df <- data.frame(table(merged_data$Weekday))
+ggplot(df) + geom_col(mapping=aes(x = factor(Var1, level = c('Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday')),, y = Freq, fill = Var1)) + labs(title = "Amount Activity Per Date")
+summary(df)
+```
+
+
+
+ * Although there the graph does not show a large difference between the days, it is noticeable that the there are mostly active during Tuesday, Wednesday and Thursday, while they the least active day was on Monday.
+
+
+ * I also want to see the difference when it comes to individuals in each aspect of the data. First, I looked at the steps discrepancy, while separating them by Id and Weekdays
+ * After making the first try in graphing, I thought it would look better if I put in descending order, so I created another dataset to hold the data and put it in descending order. I will use this dataset to just use for the ordering of the facet_wrap.
+ * I added used both the facet_grid and facet_wrap to visually represent the data in 2 different ways
+```{r}
+hold_data <- merged_data %>% group_by(Id) %>% summarize(TotalStep = sum(TotalSteps))
+hold_data <- hold_data %>% arrange(-TotalStep)
+
+ggplot(merged_data ,mapping=aes(x= factor(Weekday, level=c('Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday')), y = TotalSteps, fill = Weekday)) + geom_col()+
+  facet_grid(~factor(Id, levels = unique(hold_data$Id))) + theme(axis.text.x = element_blank()) + labs(title = "Total Steps per Day for Each Id")
+
+ggplot(merged_data ,mapping=aes(x= factor(Weekday, level=c('Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday')), y = TotalSteps, fill = Weekday)) + geom_col()+
+  facet_wrap(~factor(Id, levels = unique(hold_data$Id))) + theme(axis.text.x = element_blank()) + labs(title = "Total Steps per Day for Each Id")
+
+```
+
+
+
+
+ * We can see from this graph that while most of the users are somewhat to very active, some are close no activity at all.
+Now I want to see this in the overall view as I did for the occurence above.
+```{r}
+ggplot(merged_data,mapping=aes(x= factor(Weekday, level=c('Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday')), y = TotalSteps, fill = Weekday)) + geom_col()+
+  theme(axis.text.x = element_blank()) + labs(title = "Total Steps per Day")
+
+```
+
+
+
+ * This bargraph is somewhat similar to the first graph we generated. We see that the Weekdays that have the most steps are the same as the Weekdays having the most entries. However, we see that the Weekday with the least amount of steps is on Saturday, while the the Weekday with the least entries was on Sunday. The most simple explanation would be that, while having less amount of entries, each entry or some entry had more steps when compared to the entries on Thursday. However, this is not a final assumption but just a guess.
+
+ * Now, I want to see if sleep time or quality of sleep attributed to a higher or lower active day. First, I want to see if there was a relationship between the amount of Time idling in bed without sleeping and the amount steps walked for each entry.
+```{r}
+ggplot(merged_data, mapping=aes(x = TimeDiff, y = TotalSteps)) + geom_point()+ labs(title = "Relationship between Time Awake in Bed and Total Steps") + geom_smooth()
+```
+
+ * We can clearly see that there is no obvious relationship between the time slept and the TotalSteps walked. So we cannot say there is a relationship between these two statistics.
+
+ * Now, I am curious if it causes a difference in the Total Minutes Active. Before I do this, I noticed that I did not have a TotalMin column in the dataset.
+```{r}
+merged_data <- transform(merged_data, TotalMin=(VeryActiveMinutes+FairlyActiveMinutes+LightlyActiveMinutes+SedentaryMinutes))
+merged_data <- merged_data %>% relocate(TotalMin, .before = TotalSteps)
+```
+
+ * Now, I want to the same thing as I did for the graphs above and see the relationship between sleep and the active minutes. 
+```{r}
+ggplot(merged_data, mapping=aes(x = TimeDiff, y = TotalMin)) + geom_point()+ labs(title = "Relationship between Time Awake in Bed and Total Steps") + geom_smooth()
+```
+
+ 
+ * Although we can see that there is somewhat a negative relationship (as in the more time you spend awake in bed, the less minutes you are active), there are a lot of outliers and the points are too crowded in one place. However, if we just look at the Time Spent Awake in Bed <100, the negative relationship is clear.
+
+
+ * Now we compare, the Total minutes per day. 
+
+```{r}
+ggplot(merged_data,mapping=aes(x= factor(Weekday, level=c('Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday')), y = TotalMin, fill = Weekday)) + geom_col()+
+  theme(axis.text.x = element_blank()) + labs(title = "Total Minutes per Day")
+```
+
+
+ * This bargraph matches with the first bargraph, which compares theamount of entries per day, except for the fact that the smallest day was on Monday and not Sunday. It also somewhat matches with the second bargraph, the one that compares the TotalSteps per day, except for the fact that Saturay was the fourth most walked day while in this bargraph, it is on Friday. Perhaps, the longer walks explain the difference in between the first 2 bargraphs. 
+
+ * This leads me to question how does all of this compare? As in, how does all these stats (TotalMin,TotalSteps,TotalOccurence,TotalDistance) compare when looked at in perspective of the time spend awake in bed?
+
+```{r}
+library(cowplot)
+View(merged_data)
+TotalMinGraph <- ggplot(merged_data,mapping=aes(x= factor(Weekday, level=c('Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday')), y = TotalMin, fill = Weekday)) + geom_col()+
+  theme(axis.text.x = element_blank()) + labs(title = "Total Minutes per Day", x = NULL)
+
+TotalStepsGraph <- ggplot(merged_data,mapping=aes(x= factor(Weekday, level=c('Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday')), y = TotalSteps, fill = Weekday)) + geom_col()+
+  theme(axis.text.x = element_blank()) + labs(title = "Total Steps per Day", x = NULL)
+
+TotalDistGraph <- ggplot(merged_data,mapping=aes(x= factor(Weekday, level=c('Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday')), y = TotalDistance, fill = Weekday)) + geom_col()+
+  theme(axis.text.x = element_blank()) + labs(title = "Total Distance per Day", x = NULL)
+
+
+df <- data.frame(table(merged_data$Weekday))
+TotalActGraph <- ggplot(df) + geom_col(mapping=aes(x = factor(Var1, level = c('Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday')),, y = Freq, fill = Var1)) + labs(title = "Amount Activity Per Date", x = NULL) + theme(axis.text.x = element_blank())
+ 
+
+plot_grid(TotalMinGraph, TotalStepsGraph, TotalDistGraph, TotalActGraph, labels = "AUTO")
+```
+
+
+ * We see that when looking at the general order of the biggest to smallest, the Total Minutes graph and Amount Activity graph match with each other, while Total Steps and Total Distance match. Looking at these 4 graphs, we can confidently say that the days that the users are most active and the devices most used are on Tuesday, Wednesday, and Thursday. Not only that, the 2 least active days are Sunday and Monday while the other 2 days constantly remain somewhere in the middle.
+
+
+ * Now, this leads to want to look at the graphs when compared to the Time Spent Awake in Bed.
+```{r}
+library(cowplot)
+TimeDiff_n_TotalSteps <- ggplot(merged_data, mapping=aes(x = TimeDiff, y = TotalSteps)) + geom_point()+ labs(title = "Relationship between Time Awake in Bed and Total Steps") + geom_smooth()
+
+TimeDiff_n_TotalDist <- ggplot(merged_data, mapping=aes(x = TimeDiff, y = TotalDistance)) + geom_point()+labs(title = "Relationship between Time Awake in Bed and Total Distance") + geom_smooth()
+
+TimeDiff_n_TotalMin <- ggplot(merged_data, mapping=aes(x= TimeDiff, y = TotalMin)) + geom_point()+labs(title= "Relationship between Time Awake in Bed and Total Minutes") + geom_smooth()
+
+cor.test(merged_data$TimeDiff, merged_data$TotalMin)
+cor.test(merged_data$TimeDiff, merged_data$TotalDistance)
+cor.test(merged_data$TimeDiff, merged_data$TotalSteps)
+
+plot_grid(TimeDiff_n_TotalSteps, TimeDiff_n_TotalDist, TimeDiff_n_TotalMin, labels = "AUTO")
+```
+
+
+ * Looking at the graphs, we cannot deduct a clear relationship between the statistics. What was interesting to me was that while some entries had a total of O minutes active, there were no entries with 0 steps or 0 distance. Perhaps this is the difference between the way the Total metrics were calculated as the Total Minutes was the only one that I had to manually create and calculate (I included the sedentary active minutes into my Total Minutes and perhaps they did not add those types into the other Total calculation of the statistics).
+
+ * Looking at these graphs, I think it might be a stretch to say there is a connection with the amount of time spent awake in bed as there is no clear relationship. Although, one thing we could say is that there exists a negative relationship with Total Minutes spent active. In the graph between TimeDiff and TotalMin, the correlation score was -0.21, which the largest out of the three.
+
+ * Maybe the amount slept has a clearer relationship? This time I will do the same as above, but instead use the TotalMinutesAsleep.
+
+```{r}
+TimeDiff_n_TotalSteps <- ggplot(merged_data, mapping=aes(x = TotalMinutesAsleep, y = TotalSteps)) + geom_point()+ labs(title = "Relationship between Time Awake in Bed and Total Steps") + geom_smooth()
+
+TimeDiff_n_TotalDist <- ggplot(merged_data, mapping=aes(x = TotalMinutesAsleep, y = TotalDistance)) + geom_point()+labs(title = "Relationship between Time Awake in Bed and Total Distance") + geom_smooth()
+
+TimeDiff_n_TotalMin <- ggplot(merged_data, mapping=aes(x= TotalMinutesAsleep, y = TotalMin)) + geom_point()+labs(title= "Relationship between Time Awake in Bed and Total Minutes") + geom_smooth()
+
+cor.test(merged_data$TotalMinutesAsleep, merged_data$TotalMin)
+cor.test(merged_data$TotalMinutesAsleep, merged_data$TotalDistance)
+cor.test(merged_data$TotalMinutesAsleep, merged_data$TotalSteps)
+
+plot_grid(TimeDiff_n_TotalSteps, TimeDiff_n_TotalDist, TimeDiff_n_TotalMin, labels = "AUTO")
+```
+
+
+ * Again, looking at this, there is no relationship between TotalMinutesAsleep and the TotalSteps and TotalDistance. However, there is a clear negative relationship between TotalMinutesAsleep and the Total Minute active (outside of a few outliers). This is a curious finding as it shows that the more they slept, the less minutes the users were active for.
+ 
+ * The correlation score of TotalMinutesAsleep and TotalMin was -0.63, showing a somewhat strong negative correlation.
+
+
+ * Now doing a similar thing, but this time with TotalMinutesInBed.
+```{r}
+TimeDiff_n_TotalSteps <- ggplot(merged_data, mapping=aes(x = TotalTimeInBed, y = TotalSteps)) + geom_point()+ labs(title = "Relationship between Time Awake in Bed and Total Steps") + geom_smooth()
+
+TimeDiff_n_TotalDist <- ggplot(merged_data, mapping=aes(x = TotalTimeInBed, y = TotalDistance)) + geom_point()+labs(title = "Relationship between Time Awake in Bed and Total Distance") + geom_smooth()
+
+TimeDiff_n_TotalMin <- ggplot(merged_data, mapping=aes(x= TotalTimeInBed, y = TotalMin)) + geom_point()+labs(title= "Relationship between Time Awake in Bed and Total Minutes") + geom_smooth()
+
+cor.test(merged_data$TotalTimeInBed, merged_data$TotalMin)
+cor.test(merged_data$TotalTimeInBed, merged_data$TotalDistance)
+cor.test(merged_data$TotalTimeInBed, merged_data$TotalSteps)
+
+plot_grid(TimeDiff_n_TotalSteps, TimeDiff_n_TotalDist, TimeDiff_n_TotalMin, labels = "AUTO")
+```
+
+
+ * The finding is similar as the when compared to Total Minutes Slept. 
+The correlation score between the TotalTimeInbed and TotalMin was = -0.6658, showing that there was a decently strong negative relationship between those 2 dataset. 
+The correlation score between TotalTimeInbed and TotalDistance was = -0.1581, and for TotalTimeInBed and TotalSteps = -0.1641.
+
+
+***
+
+### __SHARE__
+
+ * After cleaning, managing, and optimizing the data for usage, here are the results that I found.
+ 
+ 
+ * First, I found out that there was a big discrepancy in the usage of the bellabeat devices by the 30 Users given.
+```{r perId, echo= FALSE}
+ggplot(merged_data ,mapping=aes(x= factor(Weekday, level=c('Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday')), y = TotalSteps, fill = Weekday)) + geom_col()+
+  facet_grid(~factor(Id, levels = unique(hold_data$Id))) + theme(axis.text.x = element_blank()) + labs(title = "Total Steps per Day for Each Id", x = NULL)
+
+ggplot(merged_data ,mapping=aes(x= factor(Weekday, level=c('Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday')), y = TotalSteps, fill = Weekday)) + geom_col()+
+  facet_wrap(~factor(Id, levels = unique(hold_data$Id))) + theme(axis.text.x = element_blank()) + labs(title = "Total Steps per Day for Each Id", x = NULL)
+```
+
+
+ * The order of the Id was by descending in their respective Total Steps. The difference in the activity is very evident from the visualization. The user that had the most steps (8877689391) had a total of 497,241 steps while the user that had the least amount of steps (4057192912) had a total of 15,352; a difference of 481,889 steps between them.  * To put this data into perspective, According to [Mayo Clinis](https://www.mayoclinic.org/healthy-lifestyle/fitness/in-depth/10000-steps/art-20317391#:~:text=The%20average%20American%20walks%203%2C000,a%20day%20every%20two%20weeks.), an average American walks between 3,000 to 4,000 steps a day. That means, an average American walks around 90,000 steps per month (using a 30 day month).
+ * So that means the most walked and the least walked person had the difference of about 5.5 average american between them (because the data was collected from 4/12/16 to 5/9/16)
+ 
+ 
+ * Another thing that I looked into was the difference in activity per weekday.
+```{r weekday, echo = FALSE}
+library(cowplot)
+TotalMinGraph <- ggplot(merged_data,mapping=aes(x= factor(Weekday, level=c('Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday')), y = TotalMin, fill = Weekday)) + geom_col()+
+  theme(axis.text.x = element_blank()) + labs(title = "Total Minutes per Day", x = NULL)
+
+TotalStepsGraph <- ggplot(merged_data,mapping=aes(x= factor(Weekday, level=c('Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday')), y = TotalSteps, fill = Weekday)) + geom_col()+
+  theme(axis.text.x = element_blank()) + labs(title = "Total Steps per Day", x = NULL)
+
+TotalDistGraph <- ggplot(merged_data,mapping=aes(x= factor(Weekday, level=c('Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday')), y = TotalDistance, fill = Weekday)) + geom_col()+
+  theme(axis.text.x = element_blank()) + labs(title = "Total Distance per Day", x = NULL)
+
+
+df <- data.frame(table(merged_data$Weekday))
+TotalActGraph <- ggplot(df) + geom_col(mapping=aes(x = factor(Var1, level = c('Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday')),, y = Freq, fill = Var1)) + labs(title = "Amount Activity Per Date", x = NULL) + theme(axis.text.x = element_blank())
+ 
+
+plot_grid(TotalMinGraph, TotalStepsGraph, TotalDistGraph, TotalActGraph, labels = "AUTO")
+```
+ 
+ 
+ * Although the graphs do differ in their own aspects, it is obvious that the most active day was on Tuesday. 
+ * We can also see that the users were most likely to be less active during the Weekends and Monday, and more active on Tuesday, Wednesday, and Thursday.
+ 
+ 
+ * I also found that the amount of time slept, amount of time spent in bed, and the amount of time spent awake in bed had no obvious and strong correlation with how active the user were (total steps and total distance)
+ 
+```{r no_cor_sleep, echo = FALSE, message = FALSE, warning = FALSE}
+library(cowplot)
+#Time Spent Awake
+TimeDiff_n_TotalSteps <- ggplot(merged_data, mapping=aes(x = TimeDiff, y = TotalSteps)) + geom_point()+ labs(title = "TimeAwakeInBed vs Total Steps") + geom_smooth() + theme(plot.title = element_text(size = 9))
+
+TimeDiff_n_TotalDist <- ggplot(merged_data, mapping=aes(x = TimeDiff, y = TotalDistance)) + geom_point()+labs(title = "TimeAwakeInBed vs Total Distance") + geom_smooth()+ theme(plot.title = element_text(size = 9))
+
+#Total Time In Bed
+TotTimeBed_n_TotalSteps <- ggplot(merged_data, mapping=aes(x = TotalTimeInBed, y = TotalSteps)) + geom_point()+ labs(title = "TimeInBed vs Total Steps") + geom_smooth()+ theme(plot.title = element_text(size = 9))
+
+TotTimeBed_n_TotalDist <- ggplot(merged_data, mapping=aes(x = TotalTimeInBed, y = TotalDistance)) + geom_point()+labs(title = "TimeInBed vs Total Distance") + geom_smooth()+ theme(plot.title = element_text(size = 9))
+
+#Total Minutes Slept
+slept_n_TotalSteps <- ggplot(merged_data, mapping=aes(x = TotalMinutesAsleep, y = TotalSteps)) + geom_point()+ labs(title = "TimeSlept vs Total Steps") + geom_smooth()+ theme(plot.title = element_text(size = 9))
+
+slept_n_TotalDist <- ggplot(merged_data, mapping=aes(x = TotalMinutesAsleep, y = TotalDistance)) + geom_point()+labs(title = "TimeSlept vs Total Distance") + geom_smooth() + theme(plot.title = element_text(size = 9))
+
+plot_grid(TimeDiff_n_TotalSteps, TimeDiff_n_TotalDist, TotTimeBed_n_TotalSteps, TotTimeBed_n_TotalDist, slept_n_TotalSteps, slept_n_TotalDist, labels = "AUTO")
+
+```
+ 
+ 
+ * We can see that there does exist a slight U-shaped curve for "TimeSlept vs Total Steps" and "TimeSlept vs Total Distance". However, because of all the outliers present, we cannot come up with any results.
+ 
+ 
+ * However there was a strong correlation when it came to the Total Minutes Active
+```{r totMin, echo = FALSE, warning= FALSE, message = FALSE}
+TimeBed_n_TotalMin <- ggplot(merged_data, mapping=aes(x= TotalTimeInBed, y = TotalMin)) + geom_point()+labs(title= "Time in Bed vs Total Minutes") + geom_smooth()
+
+TimeSlept_n_TotalMin <- ggplot(merged_data, mapping=aes(x= TotalMinutesAsleep, y = TotalMin)) + geom_point()+labs(title= "Time Slept vs Total Minutes") + geom_smooth()
+
+TimeDiff_n_TotalMin <- ggplot(merged_data, mapping=aes(x= TimeDiff, y = TotalMin)) + geom_point()+labs(title= "Time Awake in Bed vs Total Minutes") + geom_smooth()
+
+plot_grid(TimeBed_n_TotalMin, TimeSlept_n_TotalMin, TimeDiff_n_TotalMin, labels = 'AUTO')
+```
+ 
+ * We can clearly see that there is negative relationship between Total Minutes Active, which includes all types of activeness, with Time in Bed, Time Slept, Time Awake in Bed. 
+ * This finding was a bit surprising to me because I believed that the more you slept, the more active a person would be. However, the graphs shows that the more the users spend time in bed, awake in bed, and sleeping, the less active the users were. 
+ 
+ 
+##### ___Call To Action: Optimizing the Usage of the Bellabeat Devices___
+
+We found out that there was a huge discrepancy between the users in the activity recorded by the Bellabeat devices. In other to combat this. We also found out that there was a consistent difference in the usage and the activeness of the users recorded.
+Therefore, in order to push for more usage of their devices I suggest:
+
+ * Bellabeat should push for an app, downloadable on mobile devices, that connects to the or all of the Bellabeat fitness devices that the customer has. Then by using both the app and the devices, they should send alerts and notification for the users that seem to be less active than most of the other users.
+ 
+ * Bellabeat can also choose the day to send the alerts. We saw that the users were most active on Tuesday, Wednesday, and Thursday, and less active on Friday, Saturday, Sunday, and Monday (least active on Sunday and/or Monday). Therefore, Bellabeat should put focus on sending alerts to their users on Sunday and Monday (regardless of their activeness recorded) and also send alerts on Friday and Saturday.
+ 
+ * Bellabeat can also build a feature asking the users on how active they desire to be. Depending on the answer from the users, we can send them a daily report of how much they slept and how active they were. 
+    * For example, if the user stated they want to be active for at least 1,000 minutes, their Bellabeat device could recommend sleeping no more than 50 minutes idling in bed. 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
